@@ -1,0 +1,72 @@
+Sub SendFreshDraftsWithRandomDelay_CleanedHTML()
+
+    Dim olApp As Outlook.Application
+    Dim Outbox As Outlook.Folder
+    Dim originalMail As Outlook.MailItem
+    Dim newMail As Outlook.MailItem
+    Dim i As Integer
+    Dim randomDelay As Integer
+    Dim currentDelayTime As Date
+    Dim cleanedTo As String, cleanedCC As String, cleanedBCC As String
+
+    Randomize ' Initialize random number generator
+
+    Set olApp = Outlook.Application
+    Set Outbox = olApp.Session.GetDefaultFolder(olFolderOutbox)
+
+    If Outbox.Items.Count = 0 Then
+        MsgBox "📭 No emails found in Outbox.", vbInformation
+        Exit Sub
+    End If
+
+    currentDelayTime = Now
+
+    ' Loop through Outbox in reverse
+    For i = Outbox.Items.Count To 1 Step -1
+        If TypeOf Outbox.Items(i) Is Outlook.MailItem Then
+            Set originalMail = Outbox.Items(i)
+
+            ' Calculate random delay (1 to 5 minutes)
+            randomDelay = Int((5 - 1 + 1) * Rnd + 1)
+            currentDelayTime = DateAdd("n", randomDelay, currentDelayTime)
+
+            ' Clean recipient fields
+            cleanedTo = CleanEmail(originalMail.To)
+            cleanedCC = CleanEmail(originalMail.CC)
+            cleanedBCC = CleanEmail(originalMail.BCC)
+
+            ' Create and send new mail with HTML body
+            Set newMail = olApp.CreateItem(olMailItem)
+            With newMail
+                If cleanedTo <> "" Then .To = cleanedTo
+                If cleanedCC <> "" Then .CC = cleanedCC
+                If cleanedBCC <> "" Then .BCC = cleanedBCC
+                .Subject = originalMail.Subject
+                .HTMLBody = originalMail.HTMLBody
+                .DeferredDeliveryTime = currentDelayTime
+
+                On Error Resume Next
+                .Send
+                If Err.Number <> 0 Then
+                    Debug.Print "❌ Failed to send to: " & cleanedTo & " | Error: " & Err.Description
+                    Err.Clear
+                End If
+                On Error GoTo 0
+            End With
+
+            ' Optional: delete original to avoid duplication
+            originalMail.Delete
+        End If
+    Next i
+
+    MsgBox "✅ All fresh drafts sent with random delays.", vbInformation
+End Sub
+
+' ➕ Utility Function to sanitize email addresses
+Private Function CleanEmail(emailStr As String) As String
+    emailStr = Trim(emailStr)
+    emailStr = Replace(emailStr, "'", "")
+    emailStr = Replace(emailStr, """", "")
+    emailStr = Replace(emailStr, " ", "")
+    CleanEmail = emailStr
+End Function
